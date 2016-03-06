@@ -1,0 +1,128 @@
+# -*- mode: ruby -*-
+# vim: ft=ruby
+
+# ---- Notes ----
+
+# vagrant plugin install vai
+# vagrant plugin install hostupdater
+# vagrant plugin install trigger
+
+
+# SSH test using IP Addresses:
+
+#    ssh vagrant@192.168.50.20 -i ~/.vagrant.d/insecure_private_key
+#    ssh vagrant@192.168.50.21 -i ~/.vagrant.d/insecure_private_key
+ 
+# SSH test using hostname (FQDN):
+
+#    ssh vagrant@blog.vishpala.local -i ~/.vagrant.d/insecure_private_key
+#    ssh vagrant@db.vishpala.local -i ~/.vagrant.d/insecure_private_key
+
+# ---- Configuration variables ----co
+
+GUI               = true # Enable/Disable GUI
+RAM               = 128   # Default memory size in MB
+
+# Network configuration
+# DOMAIN            = ".nat.example.com"
+DOMAIN            = ".vishpala.local"
+# NETWORK           = "10.0.2.1"
+NETWORK           = "192.168.50."           # for private network and wlan0
+# NETWORK           = "192.168.11."         # 
+# NETWORK           = "10.0.1."
+NETMASK           = "255.255.255.0"
+
+BOX             = 'ubuntu/trusty64'
+BOX_URL         = 'https://atlas.hashicorp.com/"ubuntu/trusty64'
+
+# Default Virtualbox .box
+# Source: https://github.com/ginas/vagrant-debian-wheezy-64
+#BOX               = 'debian-wheezy-amd64-netinst'
+#BOX_URL           = 'https://dl.dropboxusercontent.com/u/55426468/20140317/debian-wheezy-amd64-netinst.box'
+
+# ubuntu boxes
+
+## 32
+
+# BOX                 = "trusty32"
+# BOX_URL             = 'file:///home/cjs/.vagrant.d/boxes/trusty32'
+
+# BOX               = "precise32"
+# BOX_URL           =  "http://files.vagrantup.com/precise32.box"
+
+## 64
+
+#BOX               = 'ubuntu/trusty64'
+#BOX_URL             = "https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box"
+
+#BOX               = 'ubuntu1404'
+#BOX_URL           = 'file:///home/cjs/.vagrant.d/boxes/ubuntu1404'
+
+# Debian boxes
+
+#BOX                 = 'io.debian78_64'
+#BOX_URL             = 'file:///home/cjs/.vagrant.d/boxes/io.debian78_64'
+
+
+HOSTS = {
+   "blog" => [NETWORK+"20", RAM, GUI, BOX],
+#   "db" => [NETWORK+"21", RAM, GUI, BOX],
+}
+
+# ANSIBLE_INVENTORY_DIR = '.'
+
+ANSIBLE_INVENTORY_DIR = 'tests/inventory'
+
+# ---- Vagrant configuration ----
+
+Vagrant.configure(2) do |config|
+  HOSTS.each do | (name, cfg) |
+    ipaddr, ram, gui, box = cfg
+    config.vm.define name do |machine|
+      machine.vm.box     = box
+      machine.vm.box_url = BOX_URL
+      machine.vm.guest = :debian
+      machine.vm.provider "virtualbox" do |vbox|
+        vbox.gui    = gui
+        vbox.memory = ram
+      end
+
+# private network enable 192.168.50. private_network and wlan0 
+# public network enable 192.168.11. and comment out private_networl and wlan0 and enable eth0
+
+      machine.vm.hostname = name + DOMAIN
+          machine.vm.network 'private_network', ip: ipaddr, netmask: NETMASK
+#      machine.vm.network "public_network",  ip: ipaddr, :bridge => 'wlan0'
+#       machine.vm.network "public_network", :adapter=>1 , type: "dhcp", :bridge => 'en0: eth0'
+      machine.vm.network :forwarded_port, id: 'ssh', guest: 22, host: 2224, auto_correct: true
+# following requires vagrant-hostsupdater plugin
+      machine.hostsupdater.aliases = [ name, name + DOMAIN ]
+    end
+  end # HOSTS-each
+
+# # following requires vai plugin
+  config.vm.provision "vai" do |ansible|
+    ansible.inventory_dir=ANSIBLE_INVENTORY_DIR
+    # optional: add a group listing all vagrant machines
+    ansible.groups = {
+      'secondGroup' => [ "blog" ],
+      'wordpress-server' => [ "blog", "db" ],
+      'vagrantBoxes' =>  [ "blog initial_ssh_user=vagrant", "db initial_ssh_user" ],
+    #  '_provided_by_vagrant_'=> HOSTS.keys,
+    }
+# Vai will not add our host and the initial_ssh_user var to our inventory file.
+# We do is "manuallt by running "add_node_details.sh" and somethig like this
+# to the end of our inventory file ::
+
+## blog initial_ssh_user=vagrant
+## db initial_ssh_user=vagrant
+
+[:up, :provision].each do |cmd|
+  config.trigger.after cmd, :stdout => true do
+    info 'running script now'
+    run "./add_node_details.sh"
+#    run "ls -al # running ls -al"
+  end
+end    
+end
+end

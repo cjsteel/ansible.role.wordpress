@@ -1,0 +1,12 @@
+---
+
+- name: Create mysql database
+  mysql_db: name="{{ item.dbname }}" state=present
+  with_items: "{{ wordpress_installs }}"
+
+- name: Create mysql user
+  mysql_user: 
+    name="{{ item.dbuser }}"
+    password="{{ item.dbpass }}"
+    priv=*.*:ALL
+  with_items: "{{ wordpress_installs }}"
