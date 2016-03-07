@@ -1,0 +1,73 @@
+# -*- mode: ruby -*-
+# vim: ft=ruby
+
+# ---- Requirements ----
+
+
+
+# ---- Configuration variables ----
+
+GUI               = true   # Enable/Disable GUI
+RAM               = 256     # Default memory size in MB
+CPUS              = 1       # CPUS
+# CPU_CAP           = 1       # 
+USB               = "off"   # USB
+USBEHCI           = "off"   # USB Controller
+
+# Network configuration
+DOMAIN            = ".nat.example.com"
+NETWORK           = "192.168.50."
+NETMASK           = "255.255.255.0"
+
+#BOX             = 'ubuntu/trusty64'
+#BOX_URL         = 'https://atlas.hashicorp.com/"ubuntu/trusty64'
+
+BOX               = "opscode-ubuntu-14.04"
+BOX_URL           = "http://opscode-vm-bento.s3.amazonaws.com/vagrant/virtualbox/opscode_ubuntu-14.04_chef-provisionerless.box"
+
+#BOX               = 'io.debian78_64'
+#BOX_URL           = 'file:///home/cjs/.vagrant.d/boxes/io.debian78_64'
+
+
+HOSTS = {
+   "web" => [NETWORK+"10", RAM, GUI, BOX],
+   "db" => [NETWORK+"11", RAM, GUI, BOX],
+}
+
+ANSIBLE_INVENTORY_DIR = 'inventory/'
+
+# ---- Vagrant configuration ----
+
+Vagrant.configure(2) do |config|
+  HOSTS.each do | (name, cfg) |
+    ipaddr, ram, gui, box = cfg
+
+    config.vm.define name do |machine|
+      machine.vm.box     = box
+      machine.vm.box_url = BOX_URL
+      machine.vm.guest = :debian
+      machine.vm.provider "virtualbox" do |vbox|
+        vbox.gui    = gui
+        vbox.memory = ram
+        vbox.customize ["modifyvm", :id, "--bridgeadapter1", "wlan0"]
+        vbox.customize ["modifyvm", :id, "--cpus", CPUS]
+#        vbox.customize ["modifyvm", :id, "--cpuexecutioncap", CPU_CAP]
+        vbox.customize ["modifyvm", :id, "--usb", USB]
+        vbox.customize ["modifyvm", :id, "--usbehci", USBEHCI]
+      machine.vm.hostname = name + DOMAIN
+      machine.vm.network 'private_network', ip: ipaddr, netmask: NETMASK
+      end
+
+    end
+  end # HOSTS-each
+
+  config.vm.provision "vai" do |ansible|
+    ansible.inventory_dir=ANSIBLE_INVENTORY_DIR
+    # optional: add a group listing all vagrant machines
+    ansible.groups = {
+      'secondGroup' => [ "db" ],
+    #  '_provided_by_vagrant_'=> HOSTS.keys,
+    }
+  end
+
+end
